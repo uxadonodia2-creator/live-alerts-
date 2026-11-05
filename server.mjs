@@ -17,6 +17,9 @@ const USERNAME = "xzuke6";
 
 app.use(express.static("public"));
 
+let connection = null;
+let connecting = false;
+
 app.get("/status", (req, res) => {
   res.json({
     profile: USERNAME,
@@ -24,13 +27,13 @@ app.get("/status", (req, res) => {
   });
 });
 
-let connection;
-
 function getAvatar(user) {
-  return user?.avatarThumb?.urlList?.[0]
-    || user?.avatarMedium?.urlList?.[0]
-    || user?.avatarLarge?.urlList?.[0]
-    || "";
+  return (
+    user?.avatarThumb?.urlList?.[0] ||
+    user?.avatarMedium?.urlList?.[0] ||
+    user?.avatarLarge?.urlList?.[0] ||
+    ""
+  );
 }
 
 function sendEvent(type, event) {
@@ -43,52 +46,61 @@ function sendEvent(type, event) {
     avatar: getAvatar(user),
     time: new Date().toISOString()
   });
+
+  console.log("Evento recebido:", type);
 }
 
 async function connectTikTok() {
-  connection = new TikTokLiveConnection(USERNAME);
-
-  connection.on(ControlEvent.ERROR, ({ info }) => {
-    console.error("TikTok:", info);
-  });
-
-  connection.on(WebcastEvent.FOLLOW, e =>
-    sendEvent("Novo seguidor", e)
-  );
-
-  connection.on(WebcastEvent.SHARE, e =>
-    sendEvent("Compartilhou a live", e)
-  );
-
-  connection.on(WebcastEvent.GIFT, e => {
-    if (e.repeatEnd === false) return;
-    sendEvent("Enviou presente", e);
-  });
-
-  connection.on(WebcastEvent.LIKE, e =>
-    sendEvent("Curtiu a live", e)
-  );
+  if (connecting) return;
+  connecting = true;
 
   try {
+    connection = new TikTokLiveConnection(USERNAME, {});
+
+    connection.on(ControlEvent.ERROR, (data) => {
+      console.error("Erro TikTok:", data);
+    });
+
+    connection.on(WebcastEvent.FOLLOW, (event) => {
+      sendEvent("Novo seguidor", event);
+    });
+
+    connection.on(WebcastEvent.SHARE, (event) => {
+      sendEvent("Compartilhou a live", event);
+    });
+
+    connection.on(WebcastEvent.GIFT, (event) => {
+      if (event.repeatEnd === false) return;
+      sendEvent("Enviou presente", event);
+    });
+
+    connection.on(WebcastEvent.LIKE, (event) => {
+      sendEvent("Curtiu a live", event);
+    });
+
     await connection.connect();
+
     console.log("Conectado à live de @" + USERNAME);
     io.emit("connection-status", "Conectado");
   } catch (error) {
-    console.error("Não foi possível conectar:", error.message);
+    console.error("Falha na conexão TikTok:", error.message);
     io.emit("connection-status", "Aguardando live");
+
+    connection = null;
     setTimeout(connectTikTok, 30000);
+  } finally {
+    connecting = false;
   }
 }
 
-io.on("connection", socket => {
+io.on("connection", (socket) => {
   socket.emit(
     "connection-status",
     connection?.isConnected ? "Conectado" : "Aguardando live"
   );
 });
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, "0.0.0.0", () => {
   console.log("Painel iniciado na porta " + PORT);
   connectTikTok();
 });
-                  
