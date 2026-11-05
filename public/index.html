@@ -1,0 +1,120 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIVE ALERTS</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;padding:18px;background:#090910;color:white;
+ font-family:Arial,sans-serif
+}
+main{max-width:650px;margin:auto}
+header{text-align:center;padding:20px}
+h1{color:#eac36f;letter-spacing:3px}
+.status{color:#aaa;font-size:13px}
+.panel{
+ background:#171722;border:1px solid #383343;
+ border-radius:16px;padding:17px;margin:15px 0
+}
+h2{color:#eac36f;font-size:17px}
+.event{
+ display:flex;align-items:center;gap:13px;
+ padding:13px 0;border-bottom:1px solid #333;
+ animation:appear .35s ease
+}
+.event:last-child{border:0}
+.avatar{
+ width:58px;height:58px;border-radius:50%;
+ object-fit:cover;background:#333;
+ border:2px solid #d8ad5e
+}
+.name{font-weight:bold;font-size:15px}
+.kind{font-size:13px;color:#eac36f;margin-top:5px}
+.time{font-size:11px;color:#888;margin-top:4px}
+.empty{color:#888;text-align:center;padding:25px}
+@keyframes appear{
+ from{opacity:0;transform:translateY(12px)}
+ to{opacity:1;transform:translateY(0)}
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>LIVE ALERTS</h1>
+<p class="status" id="status">Conectando...</p>
+</header>
+
+<section class="panel">
+<h2>🔴 Eventos da sua live</h2>
+<div id="events">
+<p class="empty">Aguardando interações reais...</p>
+</div>
+</section>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+const statusText = document.getElementById("status");
+const events = document.getElementById("events");
+
+socket.on("connection-status", status => {
+ statusText.textContent = "● " + status;
+});
+
+socket.on("connect", () => {
+ statusText.textContent = "● Painel conectado";
+});
+
+socket.on("disconnect", () => {
+ statusText.textContent = "● Reconectando painel...";
+});
+
+socket.on("live-event", data => {
+ const empty = events.querySelector(".empty");
+ if(empty) empty.remove();
+
+ const item = document.createElement("article");
+ item.className = "event";
+
+ const avatar = document.createElement("img");
+ avatar.className = "avatar";
+ avatar.alt = "Foto de perfil";
+
+ if(data.avatar){
+   avatar.src = data.avatar;
+ } else {
+   avatar.src = "data:image/svg+xml," +
+     encodeURIComponent(
+       '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="100%" height="100%" fill="#333"/><text x="50%" y="55%" fill="white" text-anchor="middle" font-size="28">?</text></svg>'
+     );
+ }
+
+ const info = document.createElement("div");
+ const name = document.createElement("div");
+ name.className = "name";
+ name.textContent = data.name;
+
+ const kind = document.createElement("div");
+ kind.className = "kind";
+ kind.textContent = data.type;
+
+ const time = document.createElement("div");
+ time.className = "time";
+ time.textContent = new Date(data.time).toLocaleTimeString("pt-BR");
+
+ info.append(name, kind, time);
+ item.append(avatar, info);
+ events.prepend(item);
+
+ while(events.children.length > 30){
+   events.lastElementChild.remove();
+ }
+});
+</script>
+</body>
+</html>
